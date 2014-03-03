@@ -54,44 +54,42 @@ FLASH_SECTORS = 1024
 FLASH_BLOCKS = 64
 
 def read_status_register():
-	spi.xfer2(READ_STATUS_REGISTER)
-	_S = 256
-	resp = spi.xfer2(0x00)
-	_S *= resp
-	resp = spi.xfer2(0x00)
-	_S += resp
-	return _S
+	spi.writebytes([READ_STATUS_REGISTER])
+	return spi.readbytes(1)
 	
 def read_device_id():
-	spi.xfer2(DEVICE_ID)
-	_S = 256
-	resp = spi.xfer2(0x00)
-	_S *= resp
-	resp = spi.xfer2(0x00)
-	_S += resp
-	return _S
+	spi.writebytes([DEVICE_ID, 0x00, 0x00, 0x00])
+	return spi.readbytes(2)
+	
+def read_identification():
+	spi.writebytes([READ_IDENTIFICATION])
+	return spi.readbytes(3)
 
 def read_flash_memory():
 	spi.writebytes([READ_DATA, 0x00, 0x00, 0x00])
-	resp = spi.readbytes(FLASH_SIZE_BYTES)
-	return resp
+	return spi.readbytes(FLASH_SIZE_BYTES)
 		
 def read_data_sector(sector):
 	address = sector * FLASH_SECTOR_BYTES
-	spi.xfer2([READ_DATA, address >> 16 & 0xff, address >> 8 & 0xff, address & 0xff])
-	resp = spi.readbytes(FLASH_SECTOR_BYTES)
-	return resp
+	spi.writebytes([READ_DATA, address >> 16 & 0xff, address >> 8 & 0xff, address & 0xff])
+	return spi.readbytes(FLASH_SECTOR_BYTES)
 
-def chip_erase():
+def chip_erase(bPrint=false):
 	print "erasing flash."
 	spi.xfer2(CHIP_ERASE)
-	reg = read_status_register()
+	reg = 0xff
+	while reg[0] & 0x01 == 0x01
+		time.sleep(.5)
+		reg = read_status_register()
+		if bPrint:
+			print "."
 
 if __name__ == '__main__':	
 	bWrite = false
 	bDeviceId = false
 	file = "out.flash"
 	type = "8x4Mbyte"
+	speed = 1
 	try:
 		for arg in sys.argv:
 			if arg.startswith('--type='):
@@ -100,16 +98,38 @@ if __name__ == '__main__':
 			if arg.startswith('--file='):
 				tmp = arg.split('=')
 				file = tmp[1]
-			if arg.startswith('--write'):
-				bWrite = true
+			if arg.startswith('--speed='):
+				tmp = arg.split('=')
+				speed = float.tryParse(tmp[1])
+				if speed == None:
+					speed = 1
+#			if arg.startswith('--write'):
+#				bWrite = true
 			if arg.startswith('--deviceid'):
 				bDeviceId = true
 	
 		spi.open(0,0)
+		if speed == 0.5:
+			spi.max_speed_hz = 500000					#0.5MHz
+		elif speed == 1:
+			spi.max_speed_hz = 1000000					#1MHz
+		elif speed == 2:
+			spi.max_speed_hz = 2000000					#1MHz
+		elif speed == 4:
+			spi.max_speed_hz = 4000000					#1MHz
+		elif speed == 8:
+			spi.max_speed_hz = 8000000					#1MHz
+		elif speed == 16:
+			spi.max_speed_hz = 16000000					#1MHz
+		elif speed == 32:
+			spi.max_speed_hz = 32000000					#1MHz
+			
 		if bDeviceId:		
 			print read_device_id()
 		elif bWrite:
-			
+			#erase chip			
+			#read file page at a time
+			#program page
 		else:
 			cnt = 0
 			#while cnt<FLASH_SECTORS:
