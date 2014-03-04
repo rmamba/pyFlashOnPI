@@ -42,8 +42,10 @@ CHIP_ERASE_ = 0x60
 DEVICE_ID = 0x90
 READ_IDENTIFICATION = 0x9F
 
-#
-FLASH_WORD = 8	
+#EN25F32 32Mbit flash in SO8 case
+#used in TP-Link WR741ND router to hold the firmware
+#max SPI speed is 100MHz
+FLASH_WORD = 8
 FLASH_SIZE_BYTES = 4194304
 FLASH_PAGE_BYTES = 256
 FLASH_SECTOR_BYTES = 4096
@@ -52,6 +54,16 @@ FLASH_BLOCK_BYTES = 65536
 FLASH_PAGES = 16384
 FLASH_SECTORS = 1024
 FLASH_BLOCKS = 64
+
+def set_flash_parameters(param):						#param == [wordbits, Mbits, pages, sectors, blocks]
+	FLASH_WORD = param[0]
+	FLASH_SIZE_BYTES = param[1] * 1024 * 1024 / FLASH_WORD
+	FLASH_PAGES = param[2]
+	FLASH_SECTORS = param[3]
+	FLASH_BLOCKS = param[4]
+	FLASH_PAGE_BYTES = FLASH_SIZE_BYTES / FLASH_PAGES
+	FLASH_SECTOR_BYTES = FLASH_SIZE_BYTES / FLASH_SECTORS
+	FLASH_BLOCK_BYTES = FLASH_SIZE_BYTES / FLASH_BLOCKS
 
 def read_status_register():
 	spi.writebytes([READ_STATUS_REGISTER])
@@ -75,7 +87,6 @@ def read_data_sector(sector):
 	return spi.readbytes(FLASH_SECTOR_BYTES)
 
 def chip_erase(bPrint=false):
-	print "erasing flash."
 	spi.xfer2(CHIP_ERASE)
 	reg = 0xff
 	while reg[0] & 0x01 == 0x01
@@ -83,14 +94,27 @@ def chip_erase(bPrint=false):
 		reg = read_status_register()
 		if bPrint:
 			print "."
+			
+def page_program(pa, data):
+	address = pa * FLASH_PAGE_BYTES
+	page = [PAGE_PROGRAM, address >> 16 & 0xff, address >> 8 & 0xff, address & 0xff]
+	page.extend(data)
+	spi.writebytes(page)
+	
+def enable_write():
+	spi.xfer2([WRITE_ENABLE])
+
+def disable_write():
+	spi.xfer2([WRITE_DISABLE])
 
 if __name__ == '__main__':	
 	bWrite = false
 	bDeviceId = false
 	file = "out.flash"
-	type = "8x4Mbyte"
-	speed = 1
+	device = "EN25F32"
 	try:
+		spi.open(0,0)
+	
 		for arg in sys.argv:
 			if arg.startswith('--type='):
 				tmp = arg.split('=')
@@ -101,42 +125,72 @@ if __name__ == '__main__':
 			if arg.startswith('--speed='):
 				tmp = arg.split('=')
 				speed = float.tryParse(tmp[1])
-				if speed == None:
-					speed = 1
+				if speed == 0.5:
+					spi.max_speed_hz = 500000					#0.5MHz
+				elif speed == 1:
+					spi.max_speed_hz = 1000000					#1MHz
+				elif speed == 2:
+					spi.max_speed_hz = 2000000					#2MHz
+				elif speed == 4:
+					spi.max_speed_hz = 4000000					#4MHz
+				elif speed == 8:
+					spi.max_speed_hz = 8000000					#8MHz
+				elif speed == 16:
+					spi.max_speed_hz = 16000000					#16MHz
+				elif speed == 32:
+					spi.max_speed_hz = 32000000					#32MHz
+				else
+					spi.max_speed_hz = 1000000					#default							
 #			if arg.startswith('--write'):
 #				bWrite = true
 			if arg.startswith('--deviceid'):
 				bDeviceId = true
-	
-		spi.open(0,0)
-		if speed == 0.5:
-			spi.max_speed_hz = 500000					#0.5MHz
-		elif speed == 1:
-			spi.max_speed_hz = 1000000					#1MHz
-		elif speed == 2:
-			spi.max_speed_hz = 2000000					#1MHz
-		elif speed == 4:
-			spi.max_speed_hz = 4000000					#1MHz
-		elif speed == 8:
-			spi.max_speed_hz = 8000000					#1MHz
-		elif speed == 16:
-			spi.max_speed_hz = 16000000					#1MHz
-		elif speed == 32:
-			spi.max_speed_hz = 32000000					#1MHz
-			
-		if bDeviceId:		
+			if arg.startswith('--device='):
+				tmp = arg.split('=')
+				if tmp[1] == "EN25F32":
+					set_flash_parameters([8, 32, 16384, 1024, 64])
+				else
+					print "Unknown device!"
+					raise SystemExit
+					
+		if bDeviceId:
+			print "Device ID bytes: "
 			print read_device_id()
+			print "\r\n"
 		elif bWrite:
-			#erase chip			
-			#read file page at a time
-			#program page
+			enable_write()											#enable changes to flash
+			print "Erasing flash ."
+			#chip_erase(true)										#Erase chip, prepare for programming
+			print "\r\nProgramming chip ."
+			try:
+				f = open(file, "rb")								#open program file
+				p = 0			
+				while p<FLASH_PAGES:
+					data = f.read(FLASH_PAGE_BYTES)					#read one page from file
+					page_program(p, data)							#program page
+					p++				
+			except Exception,e:
+				print "\r\nError: " + str(e)
+			finally:
+				f.close()
+			disable_write()											#disable changes to flash
+			print "\r\nDone!\r\n"
 		else:
-			cnt = 0
-			#while cnt<FLASH_SECTORS:
-			#	bytes = read_data_sector(cnt)
-			#	cnt++
-			print read_data_sector(0)
+			s = 0
+			f = open(file, "wb")
+			print "Reading chip ."
+			while s<FLASH_SECTORS:
+				bytes = read_data_sector(cnt)
+				f.write(bytes)
+				print "."
+				s++
+			f.close()
+			print "\r\nDone!\r\n"
 		spi.close()
 		
 	except Exception,e:
 		print "Error: " + str(e)
+
+	finally:
+		spi.close()
+		f.close()
