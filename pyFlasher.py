@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin python
 # Filename: pyFlasher.py
 
 '''
@@ -7,8 +7,8 @@ Created on 03 Mar 2014
 @author: rmamba@gmail.com
 '''
 
+import sys, time
 import spidev
-import time
 
 #Prerequisites
 #RaspberryPi: sudo apt-get install python-dev
@@ -86,10 +86,10 @@ def read_data_sector(sector):
 	spi.writebytes([READ_DATA, address >> 16 & 0xff, address >> 8 & 0xff, address & 0xff])
 	return spi.readbytes(FLASH_SECTOR_BYTES)
 
-def chip_erase(bPrint=false):
+def chip_erase(bPrint=False):
 	spi.xfer2(CHIP_ERASE)
 	reg = 0xff
-	while reg[0] & 0x01 == 0x01
+	while reg[0] & 0x01 == 0x01:
 		time.sleep(.5)
 		reg = read_status_register()
 		if bPrint:
@@ -107,14 +107,15 @@ def enable_write():
 def disable_write():
 	spi.xfer2([WRITE_DISABLE])
 
-if __name__ == '__main__':	
-	bWrite = false
-	bDeviceId = false
+if __name__ == '__main__':
+	bWrite = False
+	bDeviceId = False
+	bTest = False
+	f = None
 	file = "out.flash"
 	device = "EN25F32"
 	try:
 		spi.open(0,0)
-	
 		for arg in sys.argv:
 			if arg.startswith('--type='):
 				tmp = arg.split('=')
@@ -124,7 +125,7 @@ if __name__ == '__main__':
 				file = tmp[1]
 			if arg.startswith('--speed='):
 				tmp = arg.split('=')
-				speed = float.tryParse(tmp[1])
+				speed = float(tmp[1])
 				if speed == 0.5:
 					spi.max_speed_hz = 500000					#0.5MHz
 				elif speed == 1:
@@ -139,21 +140,29 @@ if __name__ == '__main__':
 					spi.max_speed_hz = 16000000					#16MHz
 				elif speed == 32:
 					spi.max_speed_hz = 32000000					#32MHz
-				else
-					spi.max_speed_hz = 1000000					#default							
+				else:
+					spi.max_speed_hz = 1000000					#default
 #			if arg.startswith('--write'):
 #				bWrite = true
 			if arg.startswith('--deviceid'):
-				bDeviceId = true
+				bDeviceId = True
+			if arg.startswith('--testspi'):
+				bTest = True
 			if arg.startswith('--device='):
 				tmp = arg.split('=')
 				if tmp[1] == "EN25F32":
 					set_flash_parameters([8, 32, 16384, 1024, 64])
-				else
+				else:
 					print "Unknown device!"
 					raise SystemExit
 					
-		if bDeviceId:
+		if bTest:
+			print "Testing SPI..."
+			for i in range(0, 256):
+				ret = spi.xfer2([i])
+				print ret
+			print "Done!"
+		elif bDeviceId:
 			print "Device ID bytes: "
 			print read_device_id()
 			print "\r\n"
@@ -168,7 +177,7 @@ if __name__ == '__main__':
 				while p<FLASH_PAGES:
 					data = f.read(FLASH_PAGE_BYTES)					#read one page from file
 					page_program(p, data)							#program page
-					p++				
+					p=p+1
 			except Exception,e:
 				print "\r\nError: " + str(e)
 			finally:
@@ -180,10 +189,11 @@ if __name__ == '__main__':
 			f = open(file, "wb")
 			print "Reading chip ."
 			while s<FLASH_SECTORS:
-				bytes = read_data_sector(cnt)
-				f.write(bytes)
-				print "."
-				s++
+				bytes = read_data_sector(s)
+				byteArray = bytearray(bytes)
+				f.write(byteArray)
+				sys.stdout.write(".")
+				s=s+1
 			f.close()
 			print "\r\nDone!\r\n"
 		spi.close()
@@ -193,4 +203,5 @@ if __name__ == '__main__':
 
 	finally:
 		spi.close()
-		f.close()
+		if f != None:
+			f.close()
