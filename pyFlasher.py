@@ -66,16 +66,15 @@ def set_flash_parameters(param):						#param == [wordbits, Mbits, pages, sectors
 	FLASH_BLOCK_BYTES = FLASH_SIZE_BYTES / FLASH_BLOCKS
 
 def read_status_register():
-	spi.writebytes([READ_STATUS_REGISTER])
-	return spi.readbytes(1)
+	return spi.xfer2([READ_STATUS_REGISTER])
 	
 def read_device_id():
-	spi.writebytes([DEVICE_ID, 0x00, 0x00, 0x00])
-	return spi.readbytes(2)
+	ret = spi.xfer2([DEVICE_ID, 0x00, 0x00, 0x00, 0x00, 0x00])
+	return ret[4:]
 	
 def read_identification():
-	spi.writebytes([READ_IDENTIFICATION])
-	return spi.readbytes(3)
+	ret = spi.xfer2([READ_IDENTIFICATION, 0x00, 0x00, 0x00])
+	return ret[1:]
 
 def read_flash_memory():
 	spi.writebytes([READ_DATA, 0x00, 0x00, 0x00])
@@ -83,8 +82,23 @@ def read_flash_memory():
 		
 def read_data_sector(sector):
 	address = sector * FLASH_SECTOR_BYTES
-	spi.writebytes([READ_DATA, address >> 16 & 0xff, address >> 8 & 0xff, address & 0xff])
-	return spi.readbytes(FLASH_SECTOR_BYTES)
+	cmd = [READ_DATA, address >> 16 & 0xff, address >> 8 & 0xff, address & 0xff]
+	tmp = FLASH_SECTOR_BYTES
+	ext = 1024
+	while tmp>0:
+		if tmp<1024:
+		    ext = tmp
+		cmd.extend([0x00] * ext)
+		tmp = tmp - ext
+	ret = spi.xfer2(cmd)
+	return ret[4:]
+
+def read_data_page(page):
+	address = page * FLASH_PAGE_BYTES
+	cmd = [READ_DATA, address >> 16 & 0xff, address >> 8 & 0xff, address & 0xff]
+	cmd.extend([0x00] * 256)
+	ret = spi.xfer2(cmd)
+	return ret[4:]
 
 def chip_erase(bPrint=False):
 	spi.xfer2(CHIP_ERASE)
@@ -164,7 +178,7 @@ if __name__ == '__main__':
 			print "Done!"
 		elif bDeviceId:
 			print "Device ID bytes: "
-			print read_device_id()
+			print read_status_register(), read_device_id(), read_identification()
 			print "\r\n"
 		elif bWrite:
 			enable_write()											#enable changes to flash
@@ -188,11 +202,12 @@ if __name__ == '__main__':
 			s = 0
 			f = open(file, "wb")
 			print "Reading chip ."
-			while s<FLASH_SECTORS:
-				bytes = read_data_sector(s)
+			while s<FLASH_PAGES:
+				bytes = read_data_page(s)
 				byteArray = bytearray(bytes)
 				f.write(byteArray)
 				sys.stdout.write(".")
+				sys.stdout.flush()
 				s=s+1
 			f.close()
 			print "\r\nDone!\r\n"
