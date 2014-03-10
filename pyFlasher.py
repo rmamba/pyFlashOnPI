@@ -7,7 +7,7 @@ Created on 03 Mar 2014
 @author: rmamba@gmail.com
 '''
 
-import sys, time
+import sys, time, json, os.path
 import spidev
 
 #Prerequisites
@@ -36,9 +36,8 @@ FAST_READ = 0x0B
 PAGE_PROGRAM = 0x02
 SECTOR_ERASE = 0x20
 BLOCK_ERASE = 0xD8
-BLOCK_ERASE_ = 0x52
-CHIP_ERASE = 0xC7
-CHIP_ERASE_ = 0x60
+CHIP_ERASE = 0x60
+CHIP_ERASE2 = 0xC7
 DEVICE_ID = 0x90
 READ_IDENTIFICATION = 0x9F
 
@@ -73,7 +72,9 @@ def read_device_id():
 	return ret[4:]
 	
 def read_identification():
-	ret = spi.xfer2([READ_IDENTIFICATION, 0x00, 0x00, 0x00])
+	cmd = [READ_IDENTIFICATION]
+	cmd.extend([0x00] * 81)
+	ret = spi.xfer2(cmd)
 	return ret[1:]
 
 def read_flash_memory():
@@ -82,6 +83,7 @@ def read_flash_memory():
 		
 def read_data_sector(sector):
 	address = sector * FLASH_SECTOR_BYTES
+	ret = []
 	cmd = [READ_DATA, address >> 16 & 0xff, address >> 8 & 0xff, address & 0xff]
 	tmp = FLASH_SECTOR_BYTES
 	ext = 1024
@@ -90,8 +92,9 @@ def read_data_sector(sector):
 		    ext = tmp
 		cmd.extend([0x00] * ext)
 		tmp = tmp - ext
-	ret = spi.xfer2(cmd)
-	return ret[4:]
+		ret2 = spi.xfer2(cmd))
+		ret.extends(ret2[4:])
+	return ret
 
 def read_data_page(page):
 	address = page * FLASH_PAGE_BYTES
@@ -101,15 +104,27 @@ def read_data_page(page):
 	return ret[4:]
 
 def chip_erase(bPrint=False):
-	spi.xfer2(CHIP_ERASE)
+	spi.xfer2([WRITE_ENABLE, CHIP_ERASE])
+	reg = 0xff
+	while reg & 0x01 == 0x01:
+		time.sleep(.5)
+		reg = read_status_register()
+		if bPrint:
+			sys.stdout.write(".")
+			sys.stdout.flush()
+			
+def page_erase(pa):
+	cmd = [WRITE_ENABLE]
+	spi.xfer2()
 	reg = 0xff
 	while reg[0] & 0x01 == 0x01:
 		time.sleep(.5)
 		reg = read_status_register()
 		if bPrint:
-			print "."
+			sys.stdout.write(".")
+			sys.stdout.flush()
 			
-def page_program(pa, data):
+def page_write(pa, data):
 	address = pa * FLASH_PAGE_BYTES
 	page = [PAGE_PROGRAM, address >> 16 & 0xff, address >> 8 & 0xff, address & 0xff]
 	page.extend(data)
@@ -122,11 +137,13 @@ def disable_write():
 	spi.xfer2([WRITE_DISABLE])
 
 if __name__ == '__main__':
+	routerParams = None
+	routerSection = None
 	bWrite = False
 	bDeviceId = False
 	bTest = False
 	f = None
-	file = "out.flash"
+	file = None
 	device = "EN25F32"
 	try:
 		spi.open(0,0)
@@ -134,9 +151,12 @@ if __name__ == '__main__':
 			if arg.startswith('--type='):
 				tmp = arg.split('=')
 				type = tmp[1]
-			if arg.startswith('--file='):
+			if (arg.startswith('--file=')) or (arg.startswith('-f=')):
 				tmp = arg.split('=')
 				file = tmp[1]
+				if not os.path.isfile(file):
+					print "File does not exist!"
+					raise SystemExit
 			if arg.startswith('--speed='):
 				tmp = arg.split('=')
 				speed = float(tmp[1])
@@ -156,48 +176,86 @@ if __name__ == '__main__':
 					spi.max_speed_hz = 32000000					#32MHz
 				else:
 					spi.max_speed_hz = 1000000					#default
-#			if arg.startswith('--write'):
+#			if (arg == '--write') or (arg == '-w'):
 #				bWrite = true
-			if arg.startswith('--deviceid'):
+			if (arg == '--deviceid') or (arg == '-id'):
 				bDeviceId = True
 			if arg.startswith('--testspi'):
 				bTest = True
-			if arg.startswith('--device='):
+			if arg.startswith('--flash=') or arg.startswith('-f='):
 				tmp = arg.split('=')
 				if tmp[1] == "EN25F32":
+					set_flash_parameters([8, 32, 16384, 1024, 64])
+				elif tmp[1] == "S25FL032P":
 					set_flash_parameters([8, 32, 16384, 1024, 64])
 				else:
 					print "Unknown device!"
 					raise SystemExit
-					
-		if bTest:
+			if arg.startswith('--router=') or arg.startswith('-r='):
+				tmp = arg.split('=')
+				tmp2 = tmp[1].split(":")
+				if len(tmp2) != 3:
+					print "Invalid router parameter!"
+					raise SystemExit
+				
+				j = file.open('romlayouts.json', 'r')
+				jsn = j.read()
+				j.close()				
+				jsn = json.loads(jsn)
+				if not tmp2[0] in jsn:
+					print "Unknown router!"
+					raise SystemExit
+				jsn = jsn[tmp2[0]]
+				if not tmp2[1] in jsn:
+					print "Unknown router version!"
+					raise SystemExit
+				jsn = jsn[tmp2[1]]
+				if not tmp2[2] in jsn:
+					print "Unknown router section!"
+					raise SystemExit
+				routerParams = jsn
+				routerSection = tmp2[2]
+		
+		if file == None:
+			print "No file specified!"
+		elif bTest:
 			print "Testing SPI..."
-			for i in range(0, 256):
-				ret = spi.xfer2([i])
-				print ret
+			print spi.xfer2( range(0, 256) )
 			print "Done!"
 		elif bDeviceId:
 			print "Device ID bytes: "
-			print read_status_register(), read_device_id(), read_identification()
+			print read_identification(), read_device_id()
 			print "\r\n"
 		elif bWrite:
-			enable_write()											#enable changes to flash
-			print "Erasing flash ."
-			#chip_erase(true)										#Erase chip, prepare for programming
-			print "\r\nProgramming chip ."
-			try:
-				f = open(file, "rb")								#open program file
-				p = 0			
-				while p<FLASH_PAGES:
-					data = f.read(FLASH_PAGE_BYTES)					#read one page from file
-					page_program(p, data)							#program page
-					p=p+1
-			except Exception,e:
-				print "\r\nError: " + str(e)
-			finally:
-				f.close()
-			disable_write()											#disable changes to flash
-			print "\r\nDone!\r\n"
+			if (routerParams != None) and (routerSection!=None):
+				addr = int(routerParams[routerSection]["offset"])
+				end = int(routerParams[routerSection]["end"])				
+				f = open(file, "rb")
+				f.seek( addr )
+				while addr<end:
+					data = f.read(256)
+					#page_erase_page(addr)
+					#page_write(addr, data)
+					addr = addr + 256
+				f.close()				
+			else:
+				#enable_write()											#enable changes to flash
+				print "Erasing flash ."
+				#chip_erase(true)										#Erase chip, prepare for programming
+				print "\r\nProgramming chip ."
+				try:
+					f = open(file, "rb")								#open program file
+					p = 0			
+					while p<FLASH_PAGES:
+						data = f.read(FLASH_PAGE_BYTES)					#read one page from file
+						page_program(p, data)							#program page
+						p=p+1
+				except Exception,e:
+					print "\r\nError: " + str(e)
+				finally:
+					f.close()
+				#disable_write()											#disable changes to flash
+				print "\r\nDone!\r\n"
 		else:
 			s = 0
 			f = open(file, "wb")
