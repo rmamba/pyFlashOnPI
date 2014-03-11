@@ -92,7 +92,7 @@ def read_data_sector(sector):
 		    ext = tmp
 		cmd.extend([0x00] * ext)
 		tmp = tmp - ext
-		ret2 = spi.xfer2(cmd))
+		ret2 = spi.xfer2(cmd)
 		ret.extends(ret2[4:])
 	return ret
 
@@ -154,9 +154,6 @@ if __name__ == '__main__':
 			if (arg.startswith('--file=')) or (arg.startswith('-f=')):
 				tmp = arg.split('=')
 				file = tmp[1]
-				if not os.path.isfile(file):
-					print "File does not exist!"
-					raise SystemExit
 			if arg.startswith('--speed='):
 				tmp = arg.split('=')
 				speed = float(tmp[1])
@@ -215,10 +212,7 @@ if __name__ == '__main__':
 					raise SystemExit
 				routerParams = jsn
 				routerSection = tmp2[2]
-		
-		if file == None:
-			print "No file specified!"
-		elif bTest:
+		if bTest:
 			print "Testing SPI..."
 			print spi.xfer2( range(0, 256) )
 			print "Done!"
@@ -226,7 +220,12 @@ if __name__ == '__main__':
 			print "Device ID bytes: "
 			print read_identification(), read_device_id()
 			print "\r\n"
+		elif file == None:
+			print "No file specified!"
 		elif bWrite:
+			if not os.path.isfile(file):
+				print "File does not exist!"
+				raise SystemExit
 			if (routerParams != None) and (routerSection!=None):
 				addr = int(routerParams[routerSection]["offset"])
 				end = int(routerParams[routerSection]["end"])				
