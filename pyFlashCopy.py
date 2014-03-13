@@ -16,6 +16,8 @@ if __name__ == '__main__':
 	bAppend = False
 	fileIn = None
 	fileOut = None
+	sections = None
+	routerParams = None
 	
 	try:
 		if len(sys.argv) < 3:
@@ -31,7 +33,7 @@ if __name__ == '__main__':
 		for arg in sys.argv:
 			if (arg == '--append') or (arg == '-a'):
 				bAppend = True
-			if arg.startswith('--size=') or arg.startswith('-s='):
+			if arg.startswith('--size=') or arg.startswith('-si='):
 				tmp = arg.split('=')
 				size = int(tmp[1])
 			if arg.startswith('--sourceOffset=') or arg.startswith('-so='):
@@ -40,6 +42,31 @@ if __name__ == '__main__':
 			if arg.startswith('--targetOffset=') or arg.startswith('-to='):
 				tmp = arg.split('=')
 				targetOffset = tmp
+			if arg.startswith('--router=') or arg.startswith('-r='):
+				#-r=WR741ND:v43:uboot,rootfs
+				tmp = arg.split('=')
+				tmp2 = tmp[1].split(":")
+				if len(tmp2) != 3:
+					print "Invalid router parameter!"
+					raise SystemExit
+				
+				j = file.open('romlayouts.json', 'r')
+				jsn = j.read()
+				j.close()				
+				jsn = json.loads(jsn)
+				if not tmp2[0] in jsn:
+					print "Unknown router!"
+					raise SystemExit
+				jsn = jsn[tmp2[0]]
+				if not tmp2[1] in jsn:
+					print "Unknown router version!"
+					raise SystemExit
+				jsn = jsn[tmp2[1]]
+				if not tmp2[2] in jsn:
+					print "Unknown router section!"
+					raise SystemExit
+				routerParams = jsn
+				routerSection = tmp2[2].split(",")
 			
 		fIn = file.open(fileIn, "rb")
 		if size == None:
@@ -66,21 +93,37 @@ if __name__ == '__main__':
 			if not os.path.isfile(fileOut):
 				print "File does not exist!"
 				raise SystemExit
-			if targetOffset > 0:
-				#inject data
-				fOut = file.open(fileOut, "r+b")
-				fOut.seek(targetOffset)
+			if routerSection == None:
+				if targetOffset > 0:
+					#inject data
+					fOut = file.open(fileOut, "r+b")
+					fOut.seek(targetOffset)
+				else:
+					fOut = file.open(fileOut, "wb")
+				
+				readData = 0
+				chunk = 4096
+				while readData < size:
+					data = fIn.read(chunk)
+					fOut.write(data)
+					readData = readData + chunk
+					if size-readData<chunk:
+						chunk = size-readData
 			else:
-				fOut = file.open(fileOut, "wb")
-			
-			chunk = 4096
-			while readData < size:
-				data = fIn.read(chunk)
-				fOut.write(data)
-				readData = readData + chunk
-				if size-readData<chunk:
-					chunk = size-readData
-			
+				for sec in routerSection:
+					fIn.seek(int(routerParams[sec]["offset"]))
+					fOut = file.open(fileOut, "r+b")
+					fOut.seek(int(routerParams[sec]["offset"]))
+					size = int(routerParams[sec]["size"])
+					
+					readData = 0
+					chunk = 4096
+					while readData < size:
+						data = fIn.read(chunk)
+						fOut.write(data)
+						readData = readData + chunk
+						if size-readData<chunk:
+							chunk = size-readData
 			fOut.close()
 		fIn.close()
 			

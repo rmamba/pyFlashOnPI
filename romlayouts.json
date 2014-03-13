@@ -3,33 +3,39 @@
 		"v4.3" : {
 			"uboot" : {
 				"offset" : "0x00000000",
-				"end" : "0x0003ffff",
-				"size": "0x00400000"
+				   "end" : "0x0001ffff",
+				   "size": "0x00020000"
 			},
 			"u-boot-env" : {
 				"offset" : "0x00040000",
-				"end" : "0x0004ffff",
-				"size": "0x0003ffff"
+				   "end" : "0x0004ffff",
+				   "size": "0x0003ffff"
 			},
 			"rootfs" : {
 				"offset" : "0x00050000",
-				"end" : "0x002fffff",
-				"size": "0x00100000"
+				   "end" : "0x002fffff",
+				   "size": "0x00100000"
 			},
 			"uImage" : {
 				"offset" : "0x00300000",
-				"end" : "0x003dffff",
-				"size": "0x002b0000"
+				   "end" : "0x003dffff",
+				   "size": "0x002b0000"
 			},
 			"NVRAM" : {
 				"offset" : "0x003e0000",
-				"end" : "0x003effff",
-				"size": "0x00010000"
+				   "end" : "0x003effff",
+				   "size": "0x00010000"
 			},
 			"ART" : {
 				"offset" : "0x003f0000",
-				"end" : "0x00400000",
-				"size": "0x00010000"
+				   "end" : "0x003fffff",
+				   "size": "0x00010000"
+			},
+			
+			"FIRMWARE": {
+				"offset" : "0x00020000",
+				   "end" : "0x003dffff",
+				   "size": "0x003c0000"
 			},
 			"DATA" : {
 				"MAC": {
