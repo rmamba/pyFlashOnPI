@@ -47,11 +47,11 @@
 					"size": "0x08"
 				},					
 				"PIN": {
-					"offset": "0x0001FE00"
+					"offset": "0x0001FE00",
 					"size": "0x08"
 				},
 				"Model": {
-					"offset": "0x00020000"
+					"offset": "0x00020000",
 					"size": "0x40"
 				}
 			}

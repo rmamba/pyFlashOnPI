@@ -65,7 +65,8 @@ def set_flash_parameters(param):						#param == [wordbits, Mbits, pages, sectors
 	FLASH_BLOCK_BYTES = FLASH_SIZE_BYTES / FLASH_BLOCKS
 
 def read_status_register():
-	return spi.xfer2([READ_STATUS_REGISTER])
+	ret = spi.xfer2([READ_STATUS_REGISTER, 0x00])
+	return ret[1]
 	
 def read_device_id():
 	ret = spi.xfer2([DEVICE_ID, 0x00, 0x00, 0x00, 0x00, 0x00])
@@ -73,13 +74,9 @@ def read_device_id():
 	
 def read_identification():
 	cmd = [READ_IDENTIFICATION]
-	cmd.extend([0x00] * 81)
+	cmd.extend([0x00] * 3)
 	ret = spi.xfer2(cmd)
 	return ret[1:]
-
-def read_flash_memory():
-	spi.writebytes([READ_DATA, 0x00, 0x00, 0x00])
-	return spi.readbytes(FLASH_SIZE_BYTES)
 		
 def read_data_sector(sector):
 	address = sector * FLASH_SECTOR_BYTES
@@ -103,44 +100,75 @@ def read_data_page(page):
 	ret = spi.xfer2(cmd)
 	return ret[4:]
 
-def chip_erase(bPrint=False):
-	spi.xfer2([WRITE_ENABLE, CHIP_ERASE])
-	reg = 0xff
+def chip_erase():
+	enable_write()
+	spi.xfer2([CHIP_ERASE])
+	reg = read_status_register()
+	while reg and 0x01 == 0x01:
+		reg = read_status_register()
+			
+def sector_erase(sa):
+	enable_write()
+	address = sa * FLASH_SECTOR_BYTES
+	page = [SECTOR_ERASE, address >> 16 & 0xff, address >> 8 & 0xff, address & 0xff]
+	reg = read_status_register()
 	while reg & 0x01 == 0x01:
-		time.sleep(.5)
+		#time.sleep(.5)
 		reg = read_status_register()
-		if bPrint:
-			sys.stdout.write(".")
-			sys.stdout.flush()
-			
-def page_erase(pa):
-	cmd = [WRITE_ENABLE]
-	spi.xfer2()
-	reg = 0xff
-	while reg[0] & 0x01 == 0x01:
-		time.sleep(.5)
+		
+def sector_write(sa, data):
+	enable_write()
+	address = sa * FLASH_SECTOR_BYTES
+	cmd = [PAGE_PROGRAM, address >> 16 & 0xff, address >> 8 & 0xff, address & 0xff]
+	cmd.extend(bytearray(data))
+	spi.xfer2(cmd)
+	reg = read_status_register()
+	while reg & 0x02 == 0x02:
+		#time.sleep(.5)
 		reg = read_status_register()
-		if bPrint:
-			sys.stdout.write(".")
-			sys.stdout.flush()
-			
+
 def page_write(pa, data):
+	enable_write()
 	address = pa * FLASH_PAGE_BYTES
-	page = [PAGE_PROGRAM, address >> 16 & 0xff, address >> 8 & 0xff, address & 0xff]
-	page.extend(data)
-	spi.writebytes(page)
+	cmd = [PAGE_PROGRAM, address >> 16 & 0xff, address >> 8 & 0xff, address & 0xff]
+	cmd.extend(bytearray(data))
+	spi.xfer2(cmd)
+	reg = read_status_register()
+	while reg & 0x02 == 0x02:
+		#time.sleep(.5)
+		reg = read_status_register()
+
+def address_write(address, data):
+	enable_write()
+	#address = pa * FLASH_PAGE_BYTES
+	cmd = [PAGE_PROGRAM, address >> 16 & 0xff, address >> 8 & 0xff, address & 0xff]
+	cmd.extend(bytearray(data))
+	spi.xfer2(cmd)
+	reg = read_status_register()
+	while reg & 0x02 == 0x02:
+		#time.sleep(.5)
+		reg = read_status_register()
 	
 def enable_write():
 	spi.xfer2([WRITE_ENABLE])
+	reg = read_status_register()
+	while reg and 0x02 == 0x00:
+		#time.sleep(.1)
+		reg = read_status_register()
 
 def disable_write():
 	spi.xfer2([WRITE_DISABLE])
+	reg = read_status_register()
+	while reg and 0x02 == 0x02:
+		time.sleep(.1)
+		reg = read_status_register()
 
 if __name__ == '__main__':
 	routerParams = None
 	routerSection = None
 	bWrite = False
 	bDeviceId = False
+	bStatus = False
 	bTest = False
 	f = None
 	file = None
@@ -173,10 +201,12 @@ if __name__ == '__main__':
 					spi.max_speed_hz = 32000000					#32MHz
 				else:
 					spi.max_speed_hz = 1000000					#default
-#			if (arg == '--write') or (arg == '-w'):
-#				bWrite = true
+			if (arg == '--write') or (arg == '-w'):
+				bWrite = True
 			if (arg == '--deviceid') or (arg == '-id'):
 				bDeviceId = True
+			if (arg == '--status') or (arg == '-st'):
+				bStatus = True
 			if arg.startswith('--testspi'):
 				bTest = True
 			if arg.startswith('--flash=') or arg.startswith('-f='):
@@ -216,6 +246,10 @@ if __name__ == '__main__':
 			print "Testing SPI..."
 			print spi.xfer2( range(0, 256) )
 			print "Done!"
+		elif bStatus:
+			print "Device Status register: "
+			print read_status_register()
+			print "\r\n"
 		elif bDeviceId:
 			print "Device ID bytes: "
 			print read_identification(), read_device_id()
@@ -227,33 +261,31 @@ if __name__ == '__main__':
 				print "File does not exist!"
 				raise SystemExit
 			if (routerParams != None) and (routerSection!=None):
-				addr = int(routerParams[routerSection]["offset"])
-				end = int(routerParams[routerSection]["end"])				
+				#addr = int(routerParams[routerSection]["offset"], 0)
+				#end = int(routerParams[routerSection]["end"], 0)				
 				f = open(file, "rb")
 				f.seek( addr )
-				while addr<end:
-					data = f.read(256)
-					#page_erase_page(addr)
-					#page_write(addr, data)
-					addr = addr + 256
+				#while addr<end:
+				#	data = f.read(256)
+				#	#page_erase(addr)
+				#	#page_write(addr, data)
+				#	addr = addr + 256
 				f.close()				
 			else:
-				#enable_write()											#enable changes to flash
 				print "Erasing flash ."
-				#chip_erase(true)										#Erase chip, prepare for programming
-				print "\r\nProgramming chip ."
+				chip_erase()										#Erase chip, prepare for programming
+				print "Programming chip ."
 				try:
 					f = open(file, "rb")								#open program file
-					p = 0			
+					p = 0
 					while p<FLASH_PAGES:
 						data = f.read(FLASH_PAGE_BYTES)					#read one page from file
-						page_program(p, data)							#program page
+						page_write(p, data)							#program page
 						p=p+1
 				except Exception,e:
 					print "\r\nError: " + str(e)
 				finally:
 					f.close()
-				#disable_write()											#disable changes to flash
 				print "\r\nDone!\r\n"
 		else:
 			s = 0
