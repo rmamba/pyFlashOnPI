@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset='utf-8' />
+		<meta http-equiv="X-UA-Compatible" content="chrome=1" />
+		<meta name="description" content="Python RestDB : pyFlashOnPI - Python in memory database with REST interface" />
+		<link rel="icon" type="image/jpeg" href="static/rmamba.jpg" />
+		<link rel="stylesheet" type="text/css" media="screen" href="static/stylesheet.css">
+		<link rel="stylesheet" href="static/jquery.jsonview.css" />
+		<script type="text/javascript" src="http://code.jquery.com/jquery.min.js"></script>
+		<script type="text/javascript" src="static/jquery.jsonview.js"></script>
+		<script type="text/javascript">
+			var data = {{ data|tojson|safe }};
+			$(function() {
+				$("#data").JSONView(data);
+			});
+		</script>
+		<title>pyFlashOnPI - Python in memory database with REST interface</title>
+	</head>
+
+	<body>
+		<!-- HEADER -->
+		<div id="header_wrap" class="outer">
+			<header class="inner">
+				<a id="forkme_banner" href="https://github.com/rmamba/pyFlashOnPI">View on GitHub</a>
+
+				<h1 id="project_title">Python RestDB</h1>
+				<h2 id="project_tagline">Store data in memory database via REST interface</h2>
+
+				<section id="downloads">
+					<a class="zip_download_link" href="https://github.com/rmamba/pyFlashOnPI/zipball/master">Download this project as a .zip file</a>
+					<a class="tar_download_link" href="https://github.com/rmamba/pyFlashOnPI/tarball/master">Download this project as a tar.gz file</a>
+				</section>
+			</header>
+		</div>
+
+		<!-- MAIN CONTENT -->
+		<div id="main_content_wrap" class="outer">
+			<section id="main_content" class="inner">
+				<h1>Python RestDB</h1>
+				<p>
+					Created for RaspberryPI to store NMEA GPS parsed locations in memory instead of writing them constantly to SD card.
+					You can find <a href="https://github.com/rmamba/pyNmea-RaspberryPi">pyNMEA-RaspberryPi</a> NMEA parser project on github.com 
+				</p>
+
+				<h2>Stored data:</h2>			
+				<div id="data"></div>
+				
+				<p>
+					<strong>Usage:</strong><br />
+					All links return data in JSON format (add (?&)pjson to return pretty JSON)<br />					
+					Store NUMBER value: http://domain:port/set/{variable}/{number}<br />
+					Store STRING value: http://domain:port/set/{variable}/"{string}"<br />
+					Store complex values with POST (can be JSON data): http://domain:port/post/{variable}<br />
+					Get value: http://domain:port/get/{variable}<br />
+					Store hidden NUMBER varlue: http://domain:port/set/{variable}/{value}?secret={HASH}<br />
+					Store hidden STRING varlue: http://domain:port/set/{variable}/{value}?secret={HASH}<br />
+					Get hidden value: http://domain:port/get/{variable}?secret={HASH}
+				</p>
+				
+				<p>
+					<strong>Admin Usage:</strong><br />
+					All links return data in JSON format<br />
+					Show hidden data: http://domain:port/admin/{password}<br />
+					Delete value: http://domain:port/admin/delete/{password}/{variable}<br />
+					Delete hidden value: http://domain:port/admin/delete/{password}/{variable}?secret={HASH}<br />
+					Purge all values: http://domain:port/admin/purge/{password}<br />
+					Purge only hidden values: http://domain:port/admin/purge/{password}?secret={HASH}<br />
+				<p>
+
+				<h2>Licence</h2>
+				<p>MIT</p>
+			</section>
+		</div>
+
+		<!-- FOOTER  -->
+		<div id="footer_wrap" class="outer">
+			<footer class="inner">
+				<p class="copyright">
+					Python RestDB maintained by <a href="https://github.com/rmamba">rmamba</a>
+				</p>
+				<p>
+					Published with <a href="http://pages.github.com">GitHub Pages</a>
+				</p>
+			</footer>
+		</div>
+
+	</body>
+</html>
